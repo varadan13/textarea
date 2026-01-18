@@ -1,9 +1,17 @@
-<!DOCTYPE html>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<link rel="manifest" href="manifest.json">
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta
+  name="theme-color"
+  content="#ffffff"
+  media="(prefers-color-scheme: light)"
+/>
+<meta
+  name="theme-color"
+  content="#000000"
+  media="(prefers-color-scheme: dark)"
+/>
+<link rel="manifest" href="manifest.json" />
 <title>Textarea</title>
 <style>
   * {
@@ -39,124 +47,79 @@
 </style>
 <article contenteditable="plaintext-only" spellcheck></article>
 <script>
-  const article = document.querySelector('article')
-  article.addEventListener('input', debounce(500, save))
-  article.addEventListener('blur', save)
-  addEventListener('DOMContentLoaded', load)
-  addEventListener('hashchange', load)
-  addEventListener('load', () => new MutationObserver(save).observe(article, {attributeFilter: ['style']}))
-  addEventListener('keydown', e => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-      e.preventDefault()
-      download()
-    }
-  })
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js')
+  const article = document.querySelector("article");
+  article.addEventListener("input", debounce(500, save));
+  article.addEventListener("blur", save);
+  addEventListener("DOMContentLoaded", load);
+  addEventListener("hashchange", load);
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js");
   }
 
-  console.log('%cGitHub https://github.com/antonmedv/textarea', 'font-size: 16px; border: 1px solid lightblue; border-radius: 12px; padding: 10px 14px; ')
+  console.log(
+    "%cGitHub https://github.com/antonmedv/textarea",
+    "font-size: 16px; border: 1px solid lightblue; border-radius: 12px; padding: 10px 14px; ",
+  );
 
   async function load() {
     try {
-      if (location.hash !== '') await set(location.hash)
+      if (location.hash !== "") await set(location.hash);
       else {
-        await set(localStorage.getItem('hash') ?? '')
-        if (article.textContent) history.replaceState({}, '', await get())
-        article.focus()
+        await set(localStorage.getItem("hash") ?? "");
+        if (article.textContent) history.replaceState({}, "", await get());
+        article.focus();
       }
     } catch (e) {
-      article.textContent = ''
-      article.removeAttribute('style')
-      article.focus()
+      article.textContent = "";
+      article.focus();
     }
-    updateTitle()
   }
 
   async function save() {
-    const hash = await get()
-    if (location.hash !== hash) history.replaceState({}, '', hash)
-    try { localStorage.setItem('hash', hash) } catch (e) {}
-    updateTitle()
+    const hash = await get();
+    if (location.hash !== hash) history.replaceState({}, "", hash);
+    try {
+      localStorage.setItem("hash", hash);
+    } catch (e) {}
   }
 
   async function set(hash) {
-    if (!hash) return
-    const [content, style] = (await decompress(hash.slice(1))).split('\x00')
-    article.textContent = content
-    if (style) article.setAttribute('style', style)
+    if (!hash) return;
+    const content = await decompress(hash.slice(1));
+    article.textContent = content;
   }
 
   async function get() {
-    const style = article.getAttribute('style')
-    const content = article.textContent + (style !== null ? '\x00' + style : '')
-    return '#' + await compress(content)
-  }
-
-  function updateTitle() {
-    const match = article.textContent.match(/^\n*#(.+)\n/)
-    document.title = match?.[1] ?? 'Textarea'
+    const content = article.textContent;
+    return "#" + (await compress(content));
   }
 
   async function compress(string) {
-    const byteArray = new TextEncoder().encode(string)
-    const stream = new CompressionStream('deflate-raw')
-    const writer = stream.writable.getWriter()
-    writer.write(byteArray)
-    writer.close()
-    const buffer = await new Response(stream.readable).arrayBuffer()
-    return new Uint8Array(buffer).toBase64({alphabet: 'base64url'})
+    const byteArray = new TextEncoder().encode(string);
+    const stream = new CompressionStream("deflate-raw");
+    const writer = stream.writable.getWriter();
+    writer.write(byteArray);
+    writer.close();
+    const buffer = await new Response(stream.readable).arrayBuffer();
+    return new Uint8Array(buffer).toBase64({ alphabet: "base64url" });
   }
 
   async function decompress(b64) {
-    const byteArray = Uint8Array.fromBase64(b64, {alphabet: 'base64url'})
-    const stream = new DecompressionStream('deflate-raw')
-    const writer = stream.writable.getWriter()
-    writer.write(byteArray)
-    writer.close()
-    const buffer = await new Response(stream.readable).arrayBuffer()
-    return new TextDecoder().decode(buffer)
+    const byteArray = Uint8Array.fromBase64(b64, { alphabet: "base64url" });
+    const stream = new DecompressionStream("deflate-raw");
+    const writer = stream.writable.getWriter();
+    writer.write(byteArray);
+    writer.close();
+    const buffer = await new Response(stream.readable).arrayBuffer();
+    return new TextDecoder().decode(buffer);
   }
 
   function debounce(ms, fn) {
-    let timer
+    let timer;
     return (...args) => {
-      clearTimeout(timer)
-      timer = setTimeout(() => fn(...args), ms)
-    }
-  }
-
-  async function download() {
-    updateTitle()
-    const doc = document.documentElement.cloneNode(true)
-    doc.querySelectorAll('script').forEach(s => s.remove())
-    doc.querySelector('article').removeAttribute('contenteditable')
-    const html = '<!DOCTYPE html>\n' + doc.outerHTML
-
-    if ('showSaveFilePicker' in window) {
-      try {
-        const handle = await showSaveFilePicker({
-          suggestedName: document.title + '.html',
-          types: [{
-            description: 'HTML file',
-            accept: {'text/html': ['.html']},
-          }],
-        })
-        const writable = await handle.createWritable()
-        await writable.write(html)
-        await writable.close()
-        return
-      } catch (e) {
-        if (e.name === 'AbortError') return
-      }
-    }
-
-    const blob = new Blob([html], {type: 'text/html'})
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = document.title + '.html'
-    a.click()
-    URL.revokeObjectURL(url)
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), ms);
+    };
   }
 </script>
